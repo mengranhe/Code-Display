@@ -1,0 +1,345 @@
+---
+title: "36-663 Project Part 1"
+author: "Mengran He"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: pdf_document 
+geometry: margin=1.5cm
+---
+```{r, include=FALSE}
+library(knitr) # We need the knitr package to set chunk options
+library(dtplyr)
+library(data.table)
+library(pander)
+library(arm)
+library(car)
+library(pastecs)
+library(lme4)
+library(ggplot2)
+library(MASS)
+library(sjPlot)
+# Set default knitr options for knitting code into the report:
+opts_chunk$set(echo=TRUE,  # change to FALSE to keep code out of the knitted document
+               cache=TRUE, # do not re-run code that has already been run
+               autodep=TRUE, # assure that caching dependencies are updated correctly
+               cache.comments=FALSE, # do not re-run a chunk if only comments are changed
+               message=FALSE, # change to FALSE to keep messages out of the knitted document
+               warning=FALSE  # change to FALSE to keep warnings out of the knitted document
+               )
+```
+
+#1. Exploratory Data Analysis
+There are 414 players and 20 unique questions. According to figure 1a, there are more than 132 players who try to answer all 20 questions and there are more than 65 players trying to answer 2 or less questions. Furthermore, figure 1b represents the number of players categorized by partial IP (organizations ip2 and computers within organizations ip3). In particular, each player can be uniquely identified by ip because ip represents the web address which denotes a specific computer, while ip2 and ip3 are group-level variables which are composed by players. Figure 1b shows that among 229 distinct organizations ip2, there are 219 organizations containing 5 or less players and 1 organization containing 39 players. Moverover, there are 253 distinct groups of computers ip3. According to figure 1c, there are 248 groups of computers, each has 5 or less players and 1 group has about 40 players. 
+
+```{r myLable1, fig.cap = 'a) Histogram of questions answered by 414 players, b) Histogram of players grouped by organizations, c) Histogram of players specified by groups of computers', echo = FALSE, fig.height = 3, fig.width = 7}
+dtf <- read.csv("dec-data.csv", header = TRUE)
+attach(dtf)
+par(mfrow = c(1,3))
+#count the number of questions that each player tries
+countquestion <- setDT(dtf)[,.(count = uniqueN(currentQuestion)), by = SID]
+#make histogram for the frequency of number of questions that players try
+hist(countquestion$count, ylim = c(0,150), breaks = seq(0,20,2), main = "Number of questions answered by players", xlab = "Questions Answered Per Player", col="lightblue", cex.main =0.9, cex.lab = 0.9, labels = TRUE)
+
+#organization/location
+countplayerip2 <- setDT(dtf)[,.(count = uniqueN(SID)), by = ip2] 
+hist(countplayerip2$count, ylim = c(0,250), breaks =seq(0,40,5), main = "Number of players grouped by ip2", xlab = "Number of players", col="lightblue", cex.main =0.9, cex.lab = 0.9, labels = TRUE)
+
+#group of computers in an organization/location
+countplayerip3 <- setDT(dtf)[,.(count = uniqueN(SID)), by = ip3]
+hist(countplayerip3$count, ylim = c(0,260), breaks =seq(0,40,5), main = "Number of players grouped by ip3", xlab = "Number of players", col="lightblue", cex.main =0.9, cex.lab = 0.9, labels = TRUE)
+```
+
+As shown in figure 2, there are 15 distinct experiments. According to the blue color barplot, there are 4 experiments answered by less than 30 players, 5 experiments answered by 30 players, and 6 experiments answered by more than 30 players. In addition, based on pink color barplot, each experiment contains all 20 types of questions.  
+
+```{r myLable2, fig.cap = 'Overlaying Barplot represents the relationship between experiments and players or questions', echo = FALSE, fig.height = 4, fig.width = 6, comment = NA, message = NA}
+#how experiments related to players:
+countPlayer <- with(dtf, tapply(SID, experimentName, FUN = function(x) length(unique(x))))
+out <- data.frame(countPlayer)
+par(mar=c(4,8,5,4))
+barplot(out$countPlayer, names.arg=row.names(out), horiz=TRUE, border=NA, las=1, col = "lightblue", xlab = "Number of players (blue)/questions(pink)", xlim = c(0,35),main="Overlapping barplot for experiment related to players and to questions",cex.main =0.9, cex.names = 0.7, cex.lab = 0.8)
+#how experiments related to questions:
+countexquestion <- with(dtf, tapply(currentQuestion, experimentName, FUN = function(x) length(unique(x))))
+out1 <- data.frame(countexquestion)
+colnames(out1) <- "numberOfQuestions"
+barplot(out1$numberOfQuestions,horiz = TRUE, border=NA, las=1, col = "pink",add = TRUE,cex.names = 0.7)
+```
+
+Table 1 summarizes the distribution of proportion-correct scores for 414 players. Specifically, among 414 players, the lowest percentage of correct answers is 0% and the highest percentage value is 100%. The median is 15.38%, average value of percentage rate is 21.77%, and the variance for the percentage rage is 0.05. In addition, 9.66% of players, namely 4 out of 414 players (SID: 161828,162085,162485,163315) have 100% of correct response. 
+
+```{r, results = 'asis', echo = FALSE, comment = NA}
+#calculate proportion of correct scores for players
+proportion <- with(dtf, tapply(resp, SID, FUN = function(x) sum(x)/length(x)))
+outproportion <- as.numeric(proportion)
+#summary(outproportion)
+#var <- var(outproportion) var = 0.05153092
+distproportion <- data.frame(0, 0, 0.1538, 0.2177, 0.3649, 1, 0.0515)
+colnames(distproportion) <- c("Min", "1stQu.", "Median", "Mean", "3rdQu.", "Max", "Var")
+pandoc.table(distproportion, stype = "rmarkdown", "Summary of proportion of correct scores", split.table = Inf)
+#among 414 players, 4 people get each question right. percentage of correct answers = 1:
+fractionPlayer <- sum(proportion[which(proportion == 1)])/414
+```
+
+After calculating the average value of reaction times for each players, we have figure 3a describing the distribution of average of reaction times across players. In particular, there are about 204 players who have average reaction times within 2 to 4 seconds, about 139 players who have average value of reaction times within 4 to 6 seconds, and 1 player who has average reaction time about 12 seconds. Then, we have the histogram of average reaction times across 20 questions in figure 3b. There are 5 questions which reflect the average value of reaction times within 3.7 to 3.75 seconds. Regardless of the players and questions, the grand mean of reaction times is 3.733 seconds. 
+
+```{r myLable3, fig.cap = 'a) Histogram of reaction time across players, b) Histogram of reaction time across questions', echo = FALSE,fig.height = 3, fig.width = 6}
+#distribution fo reaction times across players
+grandmean <- mean(dtf$reacTime)  #grand mean of reaction time = 3.732522
+reacSID<- with(dtf, tapply(reacTime, SID, FUN = function(x) mean(x)))
+par(mfrow= c(1,2))
+hist(reacSID,xlab = "Average value of reaction time (seconds)", ylim = c(0,250), breaks = seq(0,12,2),col = "lightblue", main = "Reaction times across players", cex.main = 0.9, cex.lab = 0.8, labels = TRUE)
+#distribution of reaction times across quesitons
+reacQ<- with(dtf, tapply(reacTime, currentQuestion, FUN = function(x) mean(x)))
+hist(reacQ,xlab = "Average value of reaction time (seconds)",col = "lightblue", main = "Reaction times across questions", cex.main = 0.9, cex.lab = 0.8, labels = TRUE, ylim = c(0,6))
+```
+
+#2. Logistic regression for question difficulty
+##(a) Fit logistic regression model
+The logistic regression model of predicting the probability that a question will be answered correctly given currentQuestion as predictor is summarized in model 1 without intercept: $resp_i= \beta_{1i}currentQuestion_i + \epsilon_i$. Model 1 suggests that all levels of questions are statistically significant, except question0.5 with P-value less than $\alpha$. Figure 4 represents the marginal model plot for model 1, the blue line of data and red line of model are on top of each other, so model 1 predicts quite well. Furthermore, table 2 summarizes the distribution of predicted probability of answering question correctly based on model 1. It shows that the minimum of predicted probability of getting answer right is 19.53%, the maximum of predicted probability is 46.3%, the average of predicted probability is 27.46% and the variance of these predictions is 0.004. If we don't remove intercept, the point estimate of intercept $\beta_0$ means the expected value of $log(\frac{p}{1-p})$ when x = 0. However, the predictor currentQuestion is a categorical variable which has 20 levels, so it doesn't make any sense if currentQuestion = 0. If we take out the intercept, there are 20 estimated coefficients in the model, representing 20 levels of currentQuestions individually. 
+
+```{r myLable4, fig.cap = 'Marginal Model plot for model 1', echo = FALSE,fig.height = 4, fig.width = 7}
+questions <- as.factor(dtf$currentQuestion)
+model1 <- glm(resp ~ questions - 1,data = dtf, family = "binomial")
+mmps(model1)
+```
+
+```{r, results = 'asis', echo = FALSE, comment = NA, message = NA}
+probability <- invlogit(predict(model1)) #get probability of answering question correctly
+summaryprob <- t(as.matrix(stat.desc(probability)[c(4, 5, 8, 9, 12)])) #get summary of predicted probability
+row.names(summaryprob) <- "Probability"
+pandoc.table(summaryprob,type = "rmarkdown", "Summary of predicting probability of getting correct answer", split.table = Inf)
+```
+
+##(b) Plot the coefficients against the fraction of participants who got the corresponding question right
+The plots of coefficients against the fraction of participants who got the corresponding question right and coefficients against the logit of the fraction are generated in figure 5. Figure 5b, coefficients vs logit of fraction is better than figure 5a. The estimated coefficients $\beta_i$ are generated from the logistic regression model given types of questions as predictors, $\beta_i$ represents how much the logit of fraction changes if player shifts from one question to next question. Therefore, the plot of coefficients against the logit of the fraction of correct answer is more suitable for presenting the linear relationship between response and currentQuestion as shown in figure 5b.
+
+```{r myLable5, fig.cap = 'a) Plot of coefficients vs Raw fraction of players, b) Plot of coefficients vs Logit of the fraction', echo = FALSE,fig.height = 4, fig.width = 6}
+totalQ <- setDT(dtf)[, .(count = length(SID)), by = currentQuestion] #total number of trials for each question
+correctQ <- setDT(dtf)[, .(correct = sum(resp)), by = currentQuestion] #count number of perfect hit for each question
+newdtf <- merge(totalQ, correctQ, by = "currentQuestion") #merge two data frame by question type
+p <- function(x){
+  fraction <- x[3]/x[2]
+  return(fraction)
+}
+newdtf$fraction <- apply(newdtf, 1, p)  #add new column:fraction of participants who got this question right.
+logit <- function(x){
+  ratio <- x[4]/(1-x[4])
+  return(log(ratio))
+}
+newdtf$logit <- apply(newdtf, 1, logit) #add new column:logit of the fraction
+par(mfrow = c(1,2))
+plot(newdtf$fraction, model1$coefficients, xlab = "Fraction of players having right answer", ylab = "Estimated Coefficients of questions", main = "Coefficients vs Raw fraction of players",cex.main = 0.8,cex.lab = 0.8)
+lines(model1$coefficients~newdtf$fraction, col = "lightblue")
+plot(newdtf$logit, model1$coefficients,xlab = "Logit of the fraction of players having right answer", ylab = "Estimated Coefficients of questions", main = "Coefficients vs Logit of the fraction",cex.main = 0.8,cex.lab = 0.8)
+lines(model1$coefficients~newdtf$logit, col = "lightblue")
+```
+
+##(c) Describe what methods are used to find the best model and interpret that model.
+In order to predict the probability that a question will be answered correctly, we chose five predictors from the dataset which are currentQuestion, experimentName, levelName, ip2, and ip3. By comparing the values of deviance and AIC, we found that the logistic model modelexip3: $resp = \beta_0 + \beta_{1i}experimentName_i + \beta_{2i}ip3_i + \epsilon_i$ has smallest AIC (8489) and deviance score (7911), other candidate models are in appendix II. In addition, the marginal model plot of modelexip3 in figure 6 is relatively better than others (shown in appendix II), since the data line and model line are on top of each other except for large linear predictors (>0.6). Moreover, the binned residual plot of modelexip3 in figure 7a has less points outside of 95% confidence interval than other models(shown in appendix II), but pattern exists in this plot.
+
+Modelexip3 evaluates the question difficulty by analyzing the effects of question types, player $\times$ question interaction and group of computers on question response. This model reveals that all the levels of currentQuestion and experimentName are statistically significant, but the intercept and several levels of ip3 are not significant. In addition, the cook's distance vs leverage plot in figure 7b reveals that there are several influential points in this model which will affect the overall fitting. 
+
+```{r myLable6, fig.cap = 'Marginal model plot of modelexip3', echo = FALSE,fig.height = 4, fig.width = 7}
+Ip3 <- as.factor(dtf$ip3)
+modelexip3 <- glm(resp ~ questions + Ip3 + experimentName, data = dtf, family = "binomial")
+mmps(modelexip3)
+```
+
+```{r myLable7, fig.cap = 'a) Binned residual plot of modelexip3, b) Cooks D vs Leverage plot', echo = FALSE,fig.height = 3, fig.width = 6}
+#binned residual plot
+residualexip3 <- resid(modelexip3)
+predictexip3 <- predict(modelexip3)
+par(mfrow= c(1,2))
+binnedplot(predictexip3, residualexip3, xlab = "Fitted value", ylab = "Binned residuals", main = "Modelip3",cex.pts = 0.6, cex.main = 0.8)
+plot(modelexip3, which = 6)
+```
+
+#3. Logistic regression for player proficiency
+##(a) Fit logistic regression model giving the probability that a player will provide a correct answer
+In order to measure player's proficiency, we fitted a logistic regression model by regressing question response on players' id in model 5: $resp_i = \beta_{1i}SID_i + \epsilon_i$ without intercept. It measures the effect of each player on question response. Because there are 414 distinct player id, this model contains 414 estimated coefficients, among which 129 of them are statistically significant, which means the logit of probability that a player will provide a correct answer won't change much from one player to next player for the rest of 285 players. Figure 8a shows the residual plot of model 5 which looks good for logitic model. Figure 8b indicates that there is a strong pattern and half of them are outside the boundary, even though the range of residual is small, this model is not adquate to fit the data.
+
+```{r myLable8, fig.cap = 'a)Residual plot of model 5, b) Binned residual plot of model 5', echo = FALSE,fig.height = 3, fig.width = 5}
+sid <- as.factor(dtf$SID)
+model5 <- glm(resp ~ sid - 1, data = dtf, family = "binomial")
+
+#build table to calculate how many estimated coefficients are significant
+model5Pvalue <- data.frame(pvalue = summary(model5)$coefficients[,4])
+pvalue <- function(x){   #if pvalue < 0.05, mark as 1, 0 otherwise
+  if(x<0.05){return(1)}
+  else(return(0))
+}
+model5Pvalue$count <- apply(model5Pvalue, 1, pvalue)
+sum5 <- sum(model5Pvalue$count) #129 of estimated coefficients are significant
+
+predict5 <- predict(model5)
+residual5 <- resid(model5)
+par(mfrow = c(1,2))
+#residual vs fitted value plot
+plot(predict5, residual5, xlim = c(-7, 7), xlab = "Fitted value", ylab = "Residuals", main = "Residuals vs Fitted", cex.main = 0.9, cex.lab = 0.8)  
+#binned residual plot
+binnedplot(predict5, residual5, xlim = c(-5,6), xlab = "Fitted value", ylab = "Binned residuals", main = "Binned residual plot", cex.pts = 0.6, cex.main = 0.9)
+```
+
+##(b) Plot the coefficients against the proportion correct for each player.
+Figure 9a represents the plot of estimated coefficients against the proportion correct for each player and there are 414 points corresponding to player's id. Figure 9b shows the plot of estimated coefficients against the logit of the proportion correct. There are 288 observations in figure 9b, because the rest of 126 players have 0 correct response and the logit of proportion can't be applied to their fraction of correct response. By comparison, the plot from figure 9b is better, as it shows the linear relationship between logit of proportion correct and coefficients, the coefficients represents the change of logit of probability that a player will provide a correct answer when shifiting from one player to next player. In figure 9a, it shows that there are plenty of points on the upper right and lower left cornors, caused by overfitting and the line in the middle is not straight.
+
+```{r myLable9, fig.cap = 'a) Plot of coefficients against proportion correct, b) Plot of coefficients against logit of proportion correct', echo = FALSE,fig.height = 3, fig.width = 6}
+totalP <- setDT(dtf)[, .(count = length(resp)), by = SID] #total number of times that each player has
+correctP <- setDT(dtf)[, .(correct = sum(resp)), by = SID] #count number of correct answers
+newdtf2 <- merge(totalP, correctP, by = "SID") #merge two data frame by player's id
+newdtf2$fraction <- apply(newdtf2, 1, p) #add new column as proportion correct for each player
+logit2 <- function(x){
+  ratio <- x[4]/(1-x[4])
+  if(ratio  == 0){return(NA)}
+  else{return(log(ratio))}
+  
+}
+newdtf2$logit <- apply(newdtf2, 1, logit2) #add new column:logit of the fraction,414 obs
+newdtf2notNA <- newdtf2[which(!is.na(newdtf2$logit))]  #dataset for nonmissing logit,288obs
+coefP <- data.frame(summary(model5)$coefficient) #dataset for 414 estimated coefficients
+coefPnotNA <- data.frame(coefP[which(!is.na(newdtf2$logit)),]) #dataset for corresponding coefficient given nonmissing logit, 288 obs
+
+par(mfrow = c(1,2))
+#coefficients vs proportion correct for each player
+plot(newdtf2$fraction,coefP$Estimate, xlab = "Proportion correct for each player", ylab = "Coefficients", main = "Coefficients vs proportion correct for each player", cex.main = 0.8, cex.lab = 0.8)
+#coefficients vs logit of the proportion correct
+plot(newdtf2notNA$logit, coefPnotNA$Estimate, xlab = "Logit of proportion correct for each player", ylab = "Coefficients", main = "Coefficients vs logit of proportion correct", cex.main = 0.8, cex.lab = 0.8)
+```
+
+#4. Mixed Effects Models
+##(a) Fit a mixed effects logistic regression predicting the probability of a correct response.
+We generated the mixed effect logistic regression model by assigning currentQuestion as individual-level predictor and SID as group-level variable. Model 6 has two levels, such that level 1: $resp_i = \alpha_{0j[i]} + \alpha_{1i}currentQuestion_i + \epsilon_i$; level 2: $\alpha_{0j} = \beta_{0} + \eta_j$. The summary of model 6 indicates that all of fixed effects $\alpha_{1i}$ from currentQuestion are statistically significant. In addition, the randomness of the model prediction is generated by group-level variable SID.  
+
+```{r echo = FALSE, comment = NA, message = NA}
+model6 <- glmer(resp ~ questions - 1 + (1|sid), data = dtf, family = binomial)
+display(model6)
+```
+
+The QQplot of random effects in figure 10 suggests that the data on two tails slightly deviates from the normality assumption line. In addition, figure 11 indicates that there is pattern in the binned residual plot and some points are outside of 95% confidence interval. Therefore, model 6 doesn't fit very well.
+
+```{r myLable10, fig.cap = 'Diagnostic plot of random effects in model 6', echo = FALSE,fig.height = 4, fig.width = 6}
+residual6 <- resid(model6)
+predict6 <- predict(model6)
+sjp.setTheme(geom.outline.size = 1)
+sjp.glmer(model6, type = "re.qq",geom.size = 0.5)  #random effects QQplot
+```
+
+```{r myLable11, fig.cap = 'Binned residual plot of model 6', echo = FALSE,fig.height = 3, fig.width = 6}
+binnedplot(predict6, residual6, cex.main = 0.8, cex.lab = 0.8)  #binned residual plot
+```
+
+##(b) Plot the fixed effects against the fraction of players who got the corresponding question correct or against the logit of that fraction.
+Figure 12 expresses the relationship between fixed effects from model 6 and logit of the fraction of players who got the question correct. On the horizontal axis, when the fraction of players who got the question right gets large, its corresponding logit value will also increase. On the vertical axis, the fixed effects represent the effects of 20 types of question on logit of fraction of response answer. So, the coefficients $\alpha_{1i}$ represents the changes in logit of probability of a correct response when player shifts from one question to next question. 
+
+```{r myLable12, fig.cap = 'Plot of fixed effects from model 6 vs logit of fraction of players who got question right', echo = FALSE,fig.height = 3, fig.width = 5}
+fix6 <- fixef(model6)
+plot(newdtf$logit, fix6, main = "Fixed effects vs Logit of fraction of players", xlab = "Logit of fraction of players", ylab = "Fixed effects of model6", cex.main = 0.8, cex.lab = 0.8, pch = 16)
+```
+
+##(c) Plot the random effects against the proportion correct for each player or against the logit of the proportion correct.
+The plot of random effects vs the logit of the proportion correct for each player is shown in figure 13. Random effects $\eta_j$ in model 6 represents to the randomness in predicting the logit of probability of a correct response, they are drawn from the distribution of players. Figure 13 shows that there is positive relationship between random effects and logit of the proportion correct, but as we can see, some points are lined up because of variations in the data. 
+
+```{r myLable13, fig.cap = 'Plot of random effects from model 6 vs logit of proportion correct for each player', echo = FALSE,fig.height = 3, fig.width = 5}
+#combine random effects and logit of proportion correct
+plot6 <- data.frame(cbind(logit = newdtf2$logit, randef = ranef(model6)$sid[,1]))
+#exclude missing logit value
+plot6notNA <- plot6[which(!is.na(plot6$logit)),]
+#plot random effects from model 6 vs logit of proportion correct for each player
+plot(plot6notNA$logit, plot6notNA$randef, xlab = "Logit of proportion correct", ylab = "Random effects of model 6", main = "Random effects vs Logit of proportion correct", cex.main = 0.8, cex.lab = 0.8, pch = 16)
+```
+
+##(d) Describe the methods you used to find the best model.
+We tried additional three models for predicting the probability of a correct response. Model 7: $resp = \alpha_{0j[i]} + \alpha_{1j[1]}currentQuestion_i + \alpha_{2j[i]}experimentName_i + \epsilon_i$, where $\alpha_{0j} = \beta_{00} + \eta_j$; Model 8: $resp = \alpha_{0j[i]} + \alpha_{1j[i]}experimentName_i + \epsilon_i$, where $\alpha_{0j} = \beta_{00} + \eta_j$; Model 9: $resp = \alpha_{0j[i]} + \alpha_{1j[i]}currentQuestion_i + \epsilon_i$, where $\alpha_{0j} = \beta_{00} + \beta_{01}avgAccuracy_j + \eta_{0j}$. In general, currentQuestion and experimentName are considered to be individual-level predictors, and avgAccuracy is group-level predictor as it varies by participants. In order to find the best model, we first compared the QQplot of random effects of these three models as shown in appendix II. The QQplots show that their random effects all follows normal distribution as points genearlly follow the straight line. Then we compared the values of AIC, BIC and deviance for three models. From table 4, we can see that model 9 has smallest AIC, BIC and deviance. Therefore, model 9 is the best model, it indicates that the response is affected by player's average accuracy and type of question as fixed effects and randomness caused by players.
+
+```{r echo = FALSE, tidy = TRUE}
+model7 <- glmer(resp ~ questions + experimentName + (1|SID), data = dtf, family = "binomial")
+residual7 <- resid(model7)
+predict7 <- predict(model7)
+
+model8 <- glmer(resp ~ experimentName - 1 + (1|SID), data = dtf, family = "binomial")
+residual8 <- resid(model8)
+predict8 <- predict(model8)
+
+model9 <- glmer(resp ~ avgAccuracy + questions + (1|SID) - 1, data = dtf, family = "binomial")
+residual9 <- resid(model9)
+predict9 <- predict(model9)
+```
+
+```{r, results = 'asis', echo = FALSE, comment = NA, message = NA}
+out2 <- data.frame(Model7 = c(8584.3, 8829.9, 8514.3), Model8 = c(8755.1,8867.4, 8723.1), Model9 = c(7922.7, 8077.1, 7878.7))
+row.names(out2) <- c("AIC", "BIC", "deviance")
+pandoc.table(out2, type = "rmarkdown", caption = "Comparison on AIC, BIC and deviance")
+```
+
+##(e) Add a second random intercept.
+If we add ip3, the groups of computers, as the second random effect, we will have new model 10, where avgAccuracy is group-level predictor, currentQuestion is individual-level predictor and random effects are composed by SID and ip3. Since model 10 has AIC = 7911.1, BIC = 8072.6 and deviance = 7865.1 which are all smaller than previous best model 9, so by adding a second random intercept does help. If we exclude random effect from SID, we have model 11, which has AIC = 7929.9, BIC = 8084.3 and deviance = 7885.9. By comparison, the values of AIC, BIC and deviance from model 11 are all greater than those in model 10, by the rule of 3 units difference in considering a better model, we conclude that model 10 is better than model 11, and figure 14 the QQplot of random effect of model 10 also support this argument. Even though, ip3 is composed by individual players SID, they play different random effects on the logistic regression model, so we keep the random effect of SID. Therefore, our best model with smallest values of AIC, BIC and deviance is model 10.
+
+```{r myLable14, fig.cap = 'QQplot of random effect of model 10', echo = FALSE,fig.height = 3, fig.width = 7}
+model10 <- glmer(resp ~ avgAccuracy + questions + (1|SID) + (1|ip3) - 1, data = dtf, family = "binomial")
+predict10 <- predict(model10)
+residual10 <- resid(model10)
+sjp.glmer(model10, type = "re.qq")
+
+model11 <- glmer(resp ~ avgAccuracy + questions + (1|ip3) - 1, data = dtf, family = "binomial")
+predict11 <- predict(model11)
+residual11 <- resid(model11)
+```
+
+#5. Summary
+This report analyzed a dataset of 8257 observations and 31 variables, which records the performance of 414 players playing 20 types of questions in a computer game. The goal is to predict the probability of question difficulty based on this dataset. In particular, there are 132 players answering all 20 questions and only 4 out of 414 players get 100% accuracy rate. 
+
+We first fitted logistic regression model for predicting the probability that a question will be answered correctly and tried to find the best model by conducting diagnostic analysis and comparing the values of AIC and deviance, the smaller the better. We found out that the logit of the probability of correct response has positive linear relationship with type of questions. As player moves from one question to next question, the probability that he will answer next question right depends on the coefficient of that question. Then, we fitted another logistic regression model for predicting the probability that a player will provide a correct answer. We found that the logit of the probability is linearly related to players specified by players' id. Accordingly, we can assume that the probability of question difficulty is related to players' id and types of question. Then, we fitted mixed effect logistic regression model by specifying the fixed effects and random effects. We found the best model by comparing diagnostic plots, AIC and BIC. Finally, we identified that the probablity of a correct response is related to player's average accuracy, type of question givien the random effects of ip3 and SID. Specifically, type of question is individual level predictor which has fixed effect on the correct response, player's average accuracy is group-level predictor which also has fixed effect on the correct response, while group of computers and player's id act as group-level variables which produce random error for the prediction of probability. 
+
+Even though we found that the probability of quesiton difficulty is associated with type of question and individual's average performance, there exist some drawbacks in our logistic model. The diagnostic plot indicates that the prediction is not sufficient enough and the model shows convergence issues. In addition, due to large size of parameters, R doesn't function very well on automated model selection, so there might exist better model generated by more comprehensive testing.
+
+\newpage
+#Appendix I: References
+1. Gelman, Andrew, and Jennifer Hill. Data Analysis Using Regression and Multilevel / Hierarchical Models. 10th ed. Cambridge: Cambridge University Press, 2006. Print.
+2. "How Do I Interpret Odds Ratios in Logistic Regression?" N.p., n.d. Web. 15 Nov. 2016.
+3. "Deviance (statistics)." Wikipedia. Wikimedia Foundation, n.d. Web. 16 Nov. 2016.
+4. "Visualizing (generalized) Linear Mixed Effects Models with Ggplot #rstats #lme4." R-bloggers. N.p., 2014. Web. 16 Nov. 2016.
+
+\newpage 
+#Appendix II
+```{r echo = TRUE, tidy = TRUE, comment = NA}
+####Q2(c) find best model to predict the probability that a question will be answered. There are other candidate models:
+model2 <- glm(resp ~ questions + experimentName, data = dtf, family = "binomial")
+residual2 <- resid(model2)
+predict2 <- predict(model2)
+mmps(model2) #marginal model plot
+
+model3 <- glm(resp ~ questions + experimentName + levelName, data = dtf, family = "binomial")
+residual3 <- resid(model3)
+predict3 <- predict(model3)
+mmps(model3) #marginal model plot
+
+model4 <- glm(resp ~ questions + levelName, data = dtf, family = "binomial")
+residual4 <- resid(model4)
+predict4 <- predict(model4)
+mmps(model4) #marginal model plot
+
+Ip2 <- as.factor(dtf$ip2)
+modelip <- glm(resp ~ questions + Ip2, data = dtf, family = "binomial")
+residualip <- resid(modelip)
+predictip <- predict(modelip)
+mmps(modelip) #marginal model plot
+
+Ip3 <- as.factor(dtf$ip3)
+modelip3 <- glm(resp ~ questions + Ip3, data = dtf, family = "binomial")
+residualip3 <- resid(modelip3)
+predictip3 <- predict(modelip3)
+mmps(modelip3) #marginal model plot
+
+#binned residual plot for other candidate models:
+binnedplot(predict2, residual2, xlab = "Fitted value", ylab = "Binned residuals", main = "Model 2", cex.pts = 0.6, cex.main = 0.9)
+binnedplot(predict3, residual3, xlab = "Fitted value", ylab = "Binned residuals", main = "Model 3",cex.pts = 0.6, cex.main = 0.9)
+binnedplot(predict4, residual4, xlab = "Fitted value", ylab = "Binned residuals", main = "Model 4",cex.pts = 0.6, cex.main = 0.9)
+binnedplot(predictip, residualip, xlab = "Fitted value", ylab = "Binned residuals", main = "Modelip",cex.pts = 0.6, cex.main = 0.9)
+binnedplot(predictip3, residualip3, xlab = "Fitted value", ylab = "Binned residuals", main = "Modelip3",cex.pts = 0.6, cex.main = 0.9)
+
+#Q4 find best mixed effect logistic model
+sjp.glmer(model7, type = "re.qq") # glmer(resp ~ questions + experimentName + (1|SID)
+sjp.glmer(model8, type = "re.qq") #glmer(resp ~ experimentName - 1 + (1|SID), data = dtf, family = "binomial")
+sjp.glmer(model9, type = "re.qq") #glmer(resp ~ avgAccuracy + questions + (1|SID) - 1
+```
+
+
+
