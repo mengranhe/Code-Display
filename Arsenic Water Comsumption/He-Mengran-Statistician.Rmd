@@ -1,0 +1,140 @@
+---
+title: "36-617 Midterm Report I (Statistician)"
+author: "Mengran He"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output:
+  pdf_document:
+  keep_tex: yes
+  fig_caption: yes
+geometry: margin=1in
+---
+```{r, include=FALSE}
+library(knitr) # We need the knitr package to set chunk options
+options(digits=2)
+library(arm)
+library(pander)
+library(MASS)
+library(lmtest)
+library(ggplot2)
+library(stargazer)
+library(gridExtra)
+# Set default knitr options for knitting code into the report:
+opts_chunk$set(echo=TRUE,  # change to FALSE to keep code out of the knitted document
+               cache=TRUE, # do not re-run code that has already been run
+               autodep=TRUE, # assure that caching dependencies are updated correctly
+               cache.comments=FALSE, # do not re-run a chunk if only comments are changed
+               message=FALSE, # change to FALSE to keep messages out of the knitted document
+               warning=FALSE  # change to FALSE to keep warnings out of the knitted document
+               )
+```
+
+#Exploratory Data Analysis
+This research is to analyze the relationship between arsenic concentration in toenails and arsenic levels in the well water. The samples were collected in the area of New Hampshire. The dataset includes 21 observations and five variables age (Age), gender (Sex), the measurement of how often they use well water to cook (Cook) and drink (Drink), arsenic concentration in the well (Water) and arsenic concentration in individuals' toenails (Toes). Among the 21 well water samples, 15 well water samples were detected to have trace concentration in arsenic. By looking at the histograms and boxplots of Water and Toenails, we can see that both variables are right skewed, and there are three outliers in both boxplots that are far away from upper whiskers. Those outliers may pull the regression line towards them and will appear in residuals' QQplot, so further investigation on those outliers is necessary.
+
+```{r myLabel1, tidy=TRUE, tidy.opts=list(width.cutoff= 70), fig.cap='Histogram and Boxplot of Water and Toenails',fig.height = 3,fig.width = 7, echo = TRUE}
+arsenic <- read.csv("arsenic.csv", header = TRUE)
+par(mfrow = c(1,4))
+hist(arsenic$Water, xlab = "Water", main = "Histogram of Water", ylim = c(0,20), col = "grey")
+hist(arsenic$Toes, xlab = "Toes", main = "Histogram of Toes", col = "grey", ylim = c(0,20))
+boxplot(arsenic$Water, xlab = "Water", main = "Boxplot of Water")
+boxplot(arsenic$Toes, xlab ="Toes", main = "Boxplot of Toes" )
+```
+
+Moveroever, table 1 summarizes the mean, range and variance of Water and Toes. By calculation, the mean of Water (0.016) and Toes (0.366) are both greater than their median, 0.001 and 0.175 respectively, another representation of right-skewness. By comparing the variance of these two variables, Toes (0.237) has greater variablity than Water (0.001). 
+```{r tidy=TRUE, echo = TRUE, results = 'asis'}
+#summary(arsenic$Water)  var(arsenic$Water) summary(arsenic$Toes) var(arsenic$Toes)
+#use summary() and var() to extract values of mean, median, range and variance
+out <- data.frame(Minimum =c(0.000,0.070), Median = c(0.001, 0.180), Mean = c(0.016, 0.370), Maximum = c(0.137, 2.25), Variance = c(0.001, 0.240))
+row.names(out) <-c("Water", "Toes")
+pandoc.table(out, style = "rmarkdown", "Summary of Predictor (Toes) and Response (Water)", split.table = Inf)
+```
+
+#Initial Modeling
+By assigning Water as predictor variable and Toes as response variable, we have the scatterplot as shown in figure 2. The majority of data cluster together where arsenic concentration in well water is below 0.05, except one data point on the upper right cornor where arsenic concentration in well water is above 0.1. By looking at the scatterplot, we assume that Toes and Water might have positive relationship. So, we fit our initial linear model such that $Toes = 0.16 + 12.99 \times Water$, which means for one unit change in arsenic concentration in well water, the arsenic concentation in toenails is expected to increase by 12.99. If arsenic concentration in well water is 0, the arsenic concentration in toesnails, on average, is expected to be 0.16. Accordingly, we have the regression line as shown in figure 2. Because the sample size is small (n = 21), we can't see a clear linear pattern from the scatterplot, even though it appears to be linear. So, we should check the validity of this linear model.
+
+```{r, tidy=TRUE, tidy.opts=list(width.cutoff=50), echo = TRUE, comment = NA}
+model.1 <- lm(Toes~ Water, data = arsenic)
+summary(model.1)$coefficient
+```
+
+```{r myLabel2, tidy=TRUE, tidy.opts=list(width.cutoff= 60), fig.cap='Scatterplot of Toes vs Water', fig.height =3, fig.width =3, echo = TRUE, comment = NA}
+ggplot(arsenic, aes(x = Water, y = Toes)) + geom_point() + geom_smooth(method = "lm", se = FALSE) + labs(x = "Arsenic in Water", y = "Arsenic in Toes", title = "Scatterplot of Toes vs Water")
+```
+
+#Diagnostics and Transformations
+The diagnostics plot for initial model is shown in figure 3. Residuals vs fitted values plot shows some pattern unlike residual plot under homoscedasticity assumption. Also, the residuals' QQplot clearly doesn't follow the normality assumption line, especially on two tails, point 15, 17 and 14 largely deviate from the straight line, so the residual's normality assumption is violated. The scale-location plot also indicates that the variance is not constant as pattern exists. Furthermore, the residuals vs leverage plot suggests that point 14 is a potential influential point with large leverage score (0.7) and high residual score (>2), and point 17 is an outlier as it has large residual score. According to the diagnostics plot, this model doesn't fit well as assumptions are violated. So, taking logarithms transformation on response variable or predictor variable or both might fix the problems of skewness, hetermoscedasticity and non-normality. 
+```{r myLabel3, tidy=TRUE, tidy.opts=list(width.cutoff= 70), fig.cap='a) Residuals vs Fitted values, b) Residuals QQplot, c)Scale-Location plot, d)Residual vs Leverage', echo = TRUE, fig.height = 2.5,fig.width = 7, comment = NA}
+par(mfrow = c(1,4))
+plot(model.1, cex.caption = 0.7)
+```
+
+```{r results = 'asis', tidy = TRUE, warning=FALSE, message=FALSE}
+arsenic15 <- arsenic[-c(3,5,6,10,11,18),]  #15 samples with detectable arsenic concentrations
+fit.1 <- lm(log(Toes) ~ Water, data = arsenic15)
+fit.2 <- lm(Toes ~ log(Water), data = arsenic15)
+fit.3 <- lm(log(Toes) ~ log(Water), data = arsenic15) 
+stargazer(fit.1, fit.2, fit.3, type = 'latex', title = "Summaries of regression models", header = FALSE)
+```
+
+Then, we took logarithms transformation on the 15 samples with detectable arsenic concentration, the summaries of three linear models are shown in table 2. As we can see from the summary, $R^2$ is the largest in the third model ($R^2 = 0.71$), such that 71% of variability in log of arsenic concentration in Toenails can be explained by log of arsenic concentration in well water under this regression model. 
+In addition, by comparing at scatterplot of response variable and predictor variable from three log-transformed models, shown in figure 4, we can see that the third model depicts linearilty best, because the points evenly spread out across the regression line. As comparison, the first log-transformed model shows points cluster together where arsenic concentration in toenails is below 1 except one point at upper right cornor. The second log-transformed model shows that points are lined up vertically on the left hand side where arsenic concentration in water is below 0.04. So, we decided to build linear model by log-transforming both response and predictor variables.
+```{r myLabel4, tidy=TRUE, tidy.opts=list(width.cutoff= 70), fig.cap='a) Toes vs log(Water), b) log(Toes) vs Water, c) log(Toes) vs log(Water)', echo = TRUE, fig.height = 3,fig.width = 6.5, comment = NA}
+par(mfrow = c(1,3))
+plot(log(arsenic15$Water), arsenic15$Toes, xlab = "log(Water)", ylab = "Toes", main ="Toes vs log(Water)")
+abline(1.3, 0.15, col = "red")
+plot(arsenic15$Water, log(arsenic15$Toes),xlab = "Water", ylab = "log(Toes)",main ="log(Toes) vs Water")
+abline(-1.7,20, col = "red")
+plot(log(arsenic15$Water), log(arsenic15$Toes), xlab = "log(Water)", ylab = "log(Toes)", main ="log(Toes) vs log(Water)")
+abline(0.55,0.33, col = "red")
+```
+
+After transformation, we checked the validity of this model. Based on the diagnostics plot in fiture 5, we can see that the residuals' QQplot in fiture 5b, follows the normality assumption line except points on left tail deviate a little from the straight line. The residuals plot in figure 5a and 5c seem to show some patterns, but after conducting studentized Breusch-Pagan test, p-value is 0.2 which is greater than $\alpha = 0.05$, so the equal variance assumption holds and the pattern shown in residuals plot is acceptable. In addition, the residuals vs leverage plot suggests that point 14 is potential outlier with high residual.
+
+```{r myLabel5, tidy=TRUE, tidy.opts=list(width.cutoff= 70), fig.cap='a) Residuals vs Fitted values, b) Residuals QQplot, c)Scale-Location plot, d)Residual vs Leverage', fig.height = 2.5,fig.width = 7, echo = TRUE, comment = NA}
+par(mfrow = c(1,4))
+plot(fit.3, cex.caption = 0.7)
+bptest(fit.3)
+```
+
+#Model Interfence and Results
+Based on the diaganostics analysis of 15 samples who had detectable water levels of arsenic, the ideal linear model for investigating the relationship between arsenic concentration in well water and arsenic concentration in toenails is $log(Toes) = 0.55 + 0.33 \times log(Water)$, shown in table 3. Namely, given 10% increase in arsenic concentration in well water, the arsenic concentration in toenails is expected to increase by 3.2%, $(1.1^{\beta_1})-1 = (1.1^{0.33})-1 = 0.032$. Also, We are 95% confident that the true proportional increase in arsenic concentration in toenails is between 1.9% and 4.4%, given 10% increase in arsenic concentration in well water that household consumes. In addition, our intial hypothesis is whether the arsenic concentration in toenails can be reflected by arseninc concentration in well water that hourseholds use, because the p-value for estimated coefficient of log(Water) is less than $\alpha = 0.05$, we rejected the null hypothesis and concluded that the log of arsenic concentration in well water has positive linear relationship with log of arsenic concentration in toenails.
+```{r, results = 'asis', echo = TRUE, tidy = TRUE, comment = NA}
+pandoc.table(summary(fit.3)$coefficient, "Summary of log-transformed model", split.cells = c("50%", "12.5%", "12.5%","12.5%", "12.5%"))
+#confint(fit.3, "log(Water)")  get confidence interval
+```
+
+According to the research, the arsenic concentration in toenails may be associated with participants' characteristics like age, gender and frequency of using well water for cooking or drinking. Next, we focused on whether these confounding variables will change the relationship between arsenic concentration in well water and in toenails. Fiture 6 generates the scatterplot of log(Toes) vs log(Water) given by four categories and we can see that, for each category, the categorical points seem to spread out across the range of log(Water), no cluster in a particular level is identified. We assumed that the confounding variables wouldn't change the positive linear relationship between log(Water) and log(Toes) as we analyzed previously.
+
+```{r myLabel6, tidy=TRUE, tidy.opts=list(width.cutoff= 70), fig.cap='Scatter Plot by Category', echo = TRUE, comment = NA}
+ageCategory <- function(x) {   #category of age
+    if (x < 40) return("<40")
+    else if (x>= 40 && x <= 59) return("40-59")
+    else if (x >59)  return(">=60")
+}
+arsenic15$age <- apply(arsenic15[1], 1, ageCategory) #create a new column for category of age
+a <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(age), colour = factor(age))) + geom_point() + labs(title = "age")
+b <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(Drink), colour = factor(Drink))) + geom_point() + labs(title = "Frequency of drinking water")
+c <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(Cook), colour = factor(Cook))) + geom_point() + labs(title = "Frequency of cooking")
+d <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(Sex), colour = factor(Sex))) + geom_point() + labs(title = "Gender")
+grid.arrange(a,b,c,d, nrow = 2, ncol = 2, newpage = FALSE)
+``` 
+
+Furthermore, we took a closer look at the confounding variables by including them selectively into the linear model, as shown in table 4. The table representing multiple linear regression suggests that p-values of log(Water), in all models, are less than $\alpha = 0.05$ and the estimated coefficients of log(Water) are all statistically significant and positive, which indicates that by adding up confounding variables in the model won't change the relationship between log(Water) and log(Toes). In addition, table 5 shows ANOVA summary by comparing with model with and without confounding variables. As F statistics is small and p-value is greater than $\alpha = 0.05$, we didn't reject the null. Therefore, we can assume that the model including these confounding variables doesn't appear more valid than the model that omits them based on the 15 samples that have detectable arsenic concentration.
+
+```{r results = 'asis', tidy = TRUE, tidy.opts=list(width.cutoff= 60), warning=FALSE, message=FALSE}
+try.1<- lm(log(Toes) ~ log(Water) + age, data = arsenic15)
+try.2<- lm(log(Toes) ~ log(Water) + factor(Drink), data = arsenic15)
+try.3<- lm(log(Toes) ~ log(Water) + factor(Cook), data = arsenic15)
+try.4<- lm(log(Toes) ~ log(Water) + factor(Sex), data = arsenic15)
+try.5<- lm(log(Toes) ~ log(Water) + age + factor(Drink) + factor(Cook),data = arsenic15)
+try.6<- lm(log(Toes) ~ log(Water) + age + factor(Drink) + factor(Cook) + factor(Sex),data = arsenic15)
+stargazer(try.1, try.2, try.3, try.4,try.5,try.6, type = 'latex', title = "Summaries of multiple linear regression models", header = FALSE, font.size = "tiny", column.sep.width = "0.2pt")
+```
+
+```{r, results = 'asis', echo = TRUE,tidy=TRUE, tidy = TRUE, comment = NA}
+pandoc.table(anova(fit.3, try.6), style = "rmarkdown", "ANOVA Table", split.table = Inf, justify = "left") #fit.3 is reduced model, try.6 is hypothesized full model
+```
+
+To sum up, we collected 21 observations which include households' age and gender and frequency of cooking or drinking well water, and then we fitted the initial simple linear regression model by arsenic concentration in toenails (Toes) versus arsenic concentration in well water (Water). However, due to the equal variance assumption and normality assumption were both violated in this model, we decided to take logarithms transformation on both response and predictor variables, by using 15 samples with detectable arsenic concentraiton. The transformed linear model turns out to be linear and it supports both equal variance and normality assumptions, so we concluded that the arsenic concentration in toenails can be reflected by the arsenic concentration in well water that households consumes, and their relationship appears to be positively linear. In addition, after analyzing the potential lurking variables, age, gender and frequency of cooking and drinking in the multiple regression models, we concluded that by adding up these confounding variables won't change the positive linear relationship between arsenic concentration in toenails and arsenic concentration in well water, and it is acceptable to omit them from the model. 
+
+On the other hand, this research only includes 21 samples from households and corresponding private wells, which limits the objectiveness of the linear model. For example, observations from age less than 40 and age greater than 60 are too few to compare with observation from age 40-59. Same problem applies to frequency of drinking and cooking, the observations from different levels are not balanced, which leads to skewness and bias in the model. Furthermore, the reason why we used 15 samples with detectable arsenic concentration instead of total samples is because log-transformation can't apply to value of 0 in well water's arsenic concentration. We built our linear model based on detectable samples but didn't infer the situation when arsenic in well water is 0 ppm while arsenic concentration exists in toenails. Moreover, the study of research didn't collect the information regarding individuals' diet, tobacco use and water consumption, which may contribute to the arsenic concentration in their toenails as well. They may also downplay the effect of arsenic concentration in well water at the same time. Therefore, for future study, the research should analyze participants' diet, tobacco use, water comsumption and other lurking variables, and collect the dataset regardless of geological constraint. 

@@ -1,0 +1,62 @@
+---
+title: "36-617 Midterm Report II (Client)"
+author: "Mengran He"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output:
+  pdf_document:
+  keep_tex: yes
+  fig_caption: yes
+---
+```{r, include=FALSE}
+library(knitr) # We need the knitr package to set chunk options
+options(digits=2)
+library(arm)
+library(pander)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+# Set default knitr options for knitting code into the report:
+opts_chunk$set(echo=TRUE,  # change to FALSE to keep code out of the knitted document
+               cache=TRUE, # do not re-run code that has already been run
+               autodep=TRUE, # assure that caching dependencies are updated correctly
+               cache.comments=FALSE, # do not re-run a chunk if only comments are changed
+               message=FALSE, # change to FALSE to keep messages out of the knitted document
+               warning=FALSE  # change to FALSE to keep warnings out of the knitted document
+               )
+```
+
+```{r echo = FALSE, comment = NA}
+arsenic <- read.csv("arsenic.csv", header = TRUE)
+arsenic15 <- arsenic[-c(3,5,6,10,11,18),]
+fit <- lm(log(Toes) ~ log(Water), data = arsenic15)
+```
+
+#Introduction 
+Arsenic is fatal to human beings and it may exist in household's private well. This research is to analyze the relationship between arsenic concentration in toenails and arsenic concentration in the well water in order to determine if the arsenic concentration in toenails can be reflected by ingestion of arsenic-containing water. The water sample is collected from private well, as public well water is strictly regulated. In addition, we use toenail samples as indicator of ingestion of arsenic-containing water because toenail clippings are easy to collect from individuals.
+
+#Methods
+The samples were collected in the area of New Hampshire. The dataset includes 21 households' information including their age, gender, the frequencies of using well water for drinking and cooking on a scale of 1-5, arsenic concentration from well water, and arsenic concentration from their toenail clippings. Among the 21 observations, 15 well water samples were detected to have trace concentration in arsenic. We fitted the value of water (Water) and toesnail (Toes) concentrations in simple linear regression model and investigated the impacts of age, gender and frequencies of cooking and drinking on the relationship between water and toesnail arsenic concentrations. 
+
+#Results
+The ideal model is $log(Toes) = 0.55 + 0.33 \times log(Water)$ where log(Toes) is response variable, log(Water) is predictor variable. The summary of this model is shown in table 1. This model was built based on 15 samples which had detectable arsenic concentration in well water. The model suggests that the log of arsenic concentrations in well water and in toenails are positively linearly related. In particular, the slope 0.33 means that for 10% increase in arsenic concentration in well water, the arsenic concentration in toenails is expected to increase by 3.2%. In addition, we are 95% confident that the true proportional increase in arsenic concentration in toenails is between 1.9% and 4.4%, given 10% increase in arsenic concentration in well water that household consumes. More specifically, with this model, we could assume that if individual consumes well water which contains 0.046 ppm of arsenic, his toenail concentration of arsenic is expected to be 0.631 ppm.
+```{r, results = 'asis', echo = FALSE, tidy = TRUE, comment = NA}
+pandoc.table(summary(fit)$coefficient, "Summary of log-transformed model", split.cells = c("50%", "12.5%", "12.5%","12.5%", "12.5%"))
+```
+
+Next, we further analyzed the impacts of confounding variables, age, gender and frequencies of drinking well water and cooking by well water, and checked if these confounding variables will change the relationship between log of arsenic concentration in well water and in toenails when including them in the regression model. After we fitted the multiple regression model by including these confounding variables, we found that the estimated coefficient of log(Water) doesn't change much and the relationship between log of arsenic concentration in well water and toenails is still positive and significant. We also generated the scatterplot of log(Toes) vs log(Water) by categories in fiture 2. It suggested that for each category, the categorical points seemed to spread out across the range of log(Water), no cluster in a particular level was identified, so it is acceptable to omit confounding variables including age, gender and frequencies of drinking well water and cooking by well water in our regression analysis. Therefore, we concluded that arsenic concentration in toenails can be reflected by arsenic concentration in household's well water consumption, regardless of their age, gender and frequencies of drinking well water and cooking by well water.
+```{r myLabel1, tidy=TRUE, tidy.opts=list(width.cutoff= 70), fig.cap='Scatter Plot by Category', echo = FALSE, comment = NA}
+ageCategory <- function(x) {   #category of age
+    if (x < 40) return("<40")
+    else if (x>= 40 && x <= 59) return("40-59")
+    else if (x >59)  return(">=60")
+}
+arsenic15$age <- apply(arsenic15[1], 1, ageCategory) #create a new column for category of age
+a <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(age), colour = factor(age))) + geom_point() + labs(title = "age")
+b <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(Drink), colour = factor(Drink))) + geom_point() + labs(title = "Frequency of drinking water")
+c <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(Cook), colour = factor(Cook))) + geom_point() + labs(title = "Frequency of cooking")
+d <- ggplot(arsenic15, aes(x = log(Water), y = log(Toes), fill = factor(Sex), colour = factor(Sex))) + geom_point() + labs(title = "Gender")
+grid.arrange(a,b,c,d, nrow = 2, ncol = 2, newpage = FALSE)
+``` 
+
+#Discussion
+We initially had simple linear model by fitting arsenic concentration in toenails vs arsenic concentration in well water, such that $Toes = 0.16 + 12.99 \times Water$. Nevertheless, because this model didn't fullfill the assumptions made for linear regression model, equal variance and normality, we had to take logarithms transformation on both response and predictor variables in order to meet the criterion. Furthermore, our ideal model is built based on 15 samples out of 21 observations because the rest of 6 samples with 0.0 ppm arsenic concentration in well water can't apply to log-transformation, but we didn't infer the relationship between Water and Toes when arsenic in well water is 0 ppm while arsenic concentration in toenails isn't. In addition, the study of our research didn't collect the information regarding individuals' diet, tobacco use and water consumption, which may contribute to the arsenic concentration in their toenails as well. Therefore, for future study, the research should analyze participants' diet, tobacco use, water comsumption, collect the dataset regardless of geological constraint and discuss the situation when arsenic is absent in well water while it is detected in individual's toenails. 
