@@ -1,0 +1,165 @@
+####Final Project EDA####
+library(lattice)
+load("WeatherData.RData")
+
+##Missing value
+# there are 495 rows of data that response var DEP_DEL15 is missing. If using unsupervised data, we may
+# create another dataset and give these rows value, so we will have more training/testing data.
+
+# All missing PIT temp, humidity, visibility are all from the training data, create another version to 
+# use the previous hour data for those NA's; 
+# arrival data are missing 3 records, all from PHX, the new version uses the day before.
+
+############ Features of Departure Airport (Pittsburgh) ################
+
+### Flight Distance Distribution ###
+
+histogram(tr15DEP$DISTANCE, xlab = "Flight Distance", main = "Flight Distance Distribution")
+
+###Flight Time Distribution (By Hour)###
+
+histogram(tr15DEP$DEP_Hour, xlab = "Departure Hour", main = "Departure Time Distributiin")
+
+### Weekly Flight Distribution ###
+
+histogram(tr15DEP$DAY_OF_WEEK, xlab = "Departure Day", 
+          main = "Departure Week Day Distribution")
+
+### Monthly Trend ###
+histogram(as.factor(tr15DEP$MONTH), xlab = "Departure Month", 
+          main = "Departure Month Distribution")
+
+###Pittsburgh Humidity daily trend ###
+par(mfrow = c(1,2))
+dep_hum_hour <- aggregate(DEP_Humidity ~ DEP_Hour, data = tr15DEP, mean)
+plot(DEP_Humidity ~ DEP_Hour, data = dep_hum_hour, type = "l", lwd = 1.5, 
+     xlab = "Departure Hour", ylab = "Humidity", main = "Daily Humidity Trend")
+
+### Pittsburgh Humidity Yearly trend ###
+dep_hum_month <- aggregate(DEP_Humidity ~ MONTH, data = tr15DEP, mean)
+plot(DEP_Humidity ~ MONTH, data = dep_hum_month, type = "l", lwd = 1.5, 
+     xlab = "Month", ylab = "Humidity", main = "Yearly Humidity Trend")
+
+###Pittsburgh Temperature daily trend ###
+par(mfrow = c(1,2))
+dep_temp_hour <- aggregate(DEP_Temp.F. ~ DEP_Hour, data = tr15DEP, mean)
+plot(DEP_Temp.F. ~ DEP_Hour, data = dep_temp_hour, type = "l", lwd = 1.5, 
+     xlab = "Departure Hour", ylab = "Temperature (F)", main = "Daily Temperature Trend")
+
+### Pittsburgh Temperature Yearly trend ###
+dep_temp_month <- aggregate(DEP_Temp.F. ~ MONTH, data = tr15DEP, mean)
+plot(DEP_Temp.F. ~ MONTH, data = dep_temp_month, type = "l", lwd = 1.5, 
+     xlab = "Month", ylab = "Temperature (F)", main = "Yearly Temperature Trend")
+
+###Pittsburgh Pressure daily trend ###
+par(mfrow = c(1,2))
+dep_pres_hour <- aggregate(DEP_Pressure.in. ~ DEP_Hour, data = tr15DEP, mean)
+plot(DEP_Pressure.in. ~ DEP_Hour, data = dep_pres_hour, type = "l", lwd = 1.5, 
+     xlab = "Departure Hour", ylab = "Pressure (in.)", main = "Daily Pressure Trend")
+
+### Pittsburgh Pressure Yearly trend ###
+dep_pres_month <- aggregate(DEP_Pressure.in. ~ MONTH, data = tr15DEP, mean)
+plot(DEP_Pressure.in. ~ MONTH, data = dep_pres_month, type = "l", lwd = 1.5, 
+     xlab = "Month", ylab = "Pressure (in.)", main = "Yearly Pressure Trend")
+
+###Pittsburgh Visibility daily trend ###
+par(mfrow = c(1,2))
+dep_vis_hour <- aggregate(DEP_Visibility.mi. ~ DEP_Hour, data = tr15DEP, mean)
+plot(DEP_Visibility.mi. ~ DEP_Hour, data = dep_vis_hour, type = "l", lwd = 1.5, 
+     xlab = "Departure Hour", ylab = "Visibility (mi.)", main = "Daily Visibility Trend")
+
+### Pittsburgh Visibility Yearly trend ###
+dep_vis_month <- aggregate(DEP_Visibility.mi. ~ MONTH, data = tr15DEP, mean)
+plot(DEP_Visibility.mi. ~ MONTH, data = dep_vis_month, type = "l", lwd = 1.5, 
+     xlab = "Month", ylab = "Visibility (mi.)", main = "Yearly Visibility Trend")
+
+###Pittsburgh Wind-Speed daily trend ###
+par(mfrow = c(1,2))
+dep_wind_hour <- aggregate(DEP_Wind_Speed.mph. ~ DEP_Hour, data = tr15DEP, mean)
+plot(DEP_Wind_Speed.mph. ~ DEP_Hour, data = dep_wind_hour, type = "l", lwd = 1.5, 
+     xlab = "Departure Hour", ylab = "Wind Speed (mph)", main = "Daily Wind Speed Trend")
+
+### Pittsburgh Wind-Speed Yearly trend ###
+dep_wind_month <- aggregate(DEP_Wind_Speed.mph. ~ MONTH, data = tr15DEP, mean)
+plot(DEP_Wind_Speed.mph. ~ MONTH, data = dep_wind_month, type = "l", lwd = 1.5, 
+     xlab = "Month", ylab = "Wind Speed (mph)", main = "Yearly Wind Speed Trend")
+
+
+### Pittsburgh Rain and Snow###
+plot(DEP_Rain ~ as.factor(MONTH), data = tr15DEP, xlab = "Rain", main = "Yearly Rain", col = c("darkred", "darkblue","darkgreen","orange"))
+plot(DEP_Snow ~ as.factor(MONTH), data = tr15DEP, xlab = "Snow", main = "Yearly Snow", col = c("darkred", "darkblue","darkgreen","orange"))
+
+### Pittsburgh Snow/Rain vs. Visibility ###
+snow_vis <- aggregate(DEP_Visibility.mi. ~ DEP_Snow, data = tr15DEP, mean)
+plot(DEP_Visibility.mi. ~ DEP_Snow, data = snow_vis, ylab = "Visibility (mi.)", xlab = "Snow Level", main = "Visibility vs. Snow")
+Rain_vis <- aggregate(DEP_Visibility.mi. ~ DEP_Rain, data = tr15DEP, mean)
+plot(DEP_Visibility.mi. ~ DEP_Rain, data = Rain_vis, ylab = "Visibility (mi.)", xlab = "Rain Level", main = "Visibility vs. Rain")
+
+### Pittsburgh Snow/Rain vs. Pressure ###
+snow_pres <- aggregate(DEP_Pressure.in. ~ DEP_Snow, data = tr15DEP, mean)
+plot(DEP_Pressure.in. ~ DEP_Snow, data = snow_pres, ylab = "Pressure (in.)", xlab = "Snow Level", main = "Pressure vs. Snow")
+Rain_pres <- aggregate(DEP_Pressure.in. ~ DEP_Rain, data = tr15DEP, mean)
+plot(DEP_Pressure.in. ~ DEP_Rain, data = Rain_pres, ylab = "Pressure (in.)", xlab = "Rain Level", main = "Pressure vs. Rain")
+
+
+#################### Destination Feature #######################
+### Destination Temperature ###
+month <- as.factor(tr15DEP$MONTH)
+dest <- as.factor(tr15DEP$DEST)
+dep <- tr15DEP[,c(3,5,31:41)]
+dep_grp <- aggregate(x = dep, by = list(dest,month), subset = list(31:41), FUN = mean)
+dep_grp$DEST <- dep_grp$Group.1
+dep_grp$ARV_Rain <- aggregate(as.numeric(tr15DEP$ARV_Rain), by = list(dest, month), FUN = sum)[,3]
+dep_grp$ARV_Snow <- aggregate(as.numeric(tr15DEP$ARV_Snow), by = list(dest, month), FUN = sum)[,3]
+dep_grp$ARV_Hail <- aggregate(as.numeric(tr15DEP$ARV_Hail), by = list(dest, month), FUN = sum)[,3]
+dep_grp$ARV_Thunder <- aggregate(as.numeric(tr15DEP$ARV_Thunder), by = list(dest, month), FUN = sum)[,3]
+dep_grp$ARV_Tornado <- aggregate(as.numeric(tr15DEP$ARV_Tornado), by = list(dest, month), FUN = sum)[,3]
+
+xyplot(ARV_TEMP ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Temperature", main = "Destination Monthly Average Temperature")
+xyplot(ARV_Pressure ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Pressure", main = "Destination Monthly Average Pressure")
+xyplot(ARV_Visibility ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Visibility", main = "Destination Monthly Average Visibility")
+xyplot(ARV_WindSpeed ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Wind Speed", main = "Destination Monthly Average Wind Speed")
+xyplot(ARV_Precipitation ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Precipitation", main = "Destination Monthly Average Precipitation")
+xyplot(ARV_Snowdepth ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Snow Depth", main = "Destination Monthly Average Snow Depth")
+xyplot(ARV_Rain ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Rain", main = "Destination Monthly Rain")
+xyplot(ARV_Snow ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Snow", main = "Destination Monthly Snow")
+xyplot(ARV_Hail ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Hail", main = "Destination Monthly Hail")
+xyplot(ARV_Thunder ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Thunder", main = "Destination Monthly Thunder")
+xyplot(ARV_Tornado ~ MONTH|DEST, data = dep_grp, pch = 19, ylab = "Tornado", main = "Destination Monthly Tornado")
+
+
+######################## Carriers Distribution #################################
+histogram(tr15DEP$CARRIER, xlab = "Carrier", main = "Carrier Distribution")
+table(tr15DEP$CARRIER, tr15DEP$DEST)
+
+######################## Delayed vs. Undelayed ############################
+delay <- tr15DEP[which(tr15DEP$DEP_DEL15 == 1), ]
+noDelay <- tr15DEP[which(tr15DEP$DEP_DEL15==0),]
+
+par(mfrow = c(1,2))
+hist(delay$CRS_ELAPSED_TIME, main = "Elapsed time for delayed flights", xlab = "Elapsed Time", freq = FALSE)
+hist(noDelay$CRS_ELAPSED_TIME, main = "Elapsed time for non-delayed flights", xlab = "Elapsed Time", freq = FALSE)
+
+boxplot(delay$CRS_ELAPSED_TIME, delay$CRS_ELAPSED_TIME, main = "Delay vs. Not Delay: Elapsed time", names = c("delay", "noy delay"))
+
+boxplot(delay$DISTANCE, noDelay$DISTANCE, main = "Delay vs. Not Delay: Distance", names = c("delay", "not delay"))
+
+boxplot(delay$DEP_Hour, noDelay$DEP_Hour, main = "Delay vs. Not Delay: Departure Time", names = c("delay", "not delay"))
+
+boxplot(delay$DEP_Temp.F., noDelay$DEP_Temp.F., main = "Delay vs. Not Delay: Temperature", names = c("delay", "not delay"))
+
+boxplot(delay$DEP_Humidity, noDelay$DEP_Humidity, main = "Delay vs. Not Delay: Humidity", names = c("delay", "not delay"))
+
+boxplot(delay$DEP_Pressure.in., noDelay$DEP_Pressure.in., main ="Delay vs. Not Delay: Pressure", names = c("delay", "not delay") )
+
+delay_vis <- summary(delay$DEP_Visibility.mi.)
+noDelay_vis <- summary(noDelay$DEP_Visibility.mi.)
+vis <- cbind(delay_vis, noDelay_vis)
+colnames(vis) <- c("Delay", "Not delay")
+vis <- t(vis)
+
+boxplot(delay$DEP_Wind_Speed.mph., noDelay$DEP_Wind_Speed.mph.,  main = "Delay vs. Not Delay: Wind Speed", names = c("delay", "not delay"))
+
+boxplot(delay$ARV_Pressure, noDelay$ARV_Pressure, main = "Delay vs. Not Delay: Arrival Pressure", names = c("delay", "not delay"))
+
+boxplot(delay$ARV_TEMP, noDelay$ARV_Pressure, main = "Delay vs. Not Delay: Arrival Temperature", names = c("delay", "not delay"))

@@ -1,0 +1,53 @@
+---
+title: 'Data & Knn part'
+subtitle: ''
+author: "Tracy"
+date: "Apr 27, 2017"
+output: pdf_document
+geometry: margin=1in
+---
+
+```{r, include=FALSE}
+library(knitr) # We need the knitr package to set chunk options
+library(ggplot2)
+
+# Set default knitr options for knitting code into the report:
+opts_chunk$set(echo=FALSE,  # change to FALSE to keep code out of the knitted document
+               cache=TRUE, # do not re-run code that has already been run if value = TRUE, helpful when you have really long calcs
+               autodep=TRUE, # assure that caching dependencies are updated correctly
+               cache.comments=TRUE, # do not re-run a chunk if only comments are changed
+               message=FALSE, # change to FALSE to keep messages out of the knitted document
+               warning=FALSE,  # change to FALSE to keep warnings out of the knitted document
+               tidy=TRUE,
+               tidy.opts=list(width.cutoff=80),
+               comment=NA # to remove the ## in front of all the output
+               )
+```
+
+
+# Methods
+
+## Data & Exploratory Data Analysis
+
+The original data set is an extract from the Airline On-Time Performance Data made available through the Bureau of Transportation Statistics of the U.S. Department of Transportation. It reflects commercial flight activity to and from Pittsburgh International Airport (airport code PIT).    
+Hourly weather data for PIT were scraped from https://www.wunderground.com. It then was merged into the original data set based on the CRS departure time (CRS_DEP_TIME). The closest PIT hourly weather record that was before the CRS_DEP_TIME was used. Daily weather data for the arrival airports was requested from https://www7.ncdc.noaa.gov/. It then was merged into the original data set based on the flight date (FL_DATE) and arrival destination (DEST).    
+
+```{r eda1, fig.height=3.5}
+load("WeatherData.RData")
+ggplot(tr15DEPNonM, aes(x = SameHourFlightsTOTAL)) + 
+  geom_bar(aes(fill = as.factor(DEP_DEL15)), position = "fill") +
+  theme_bw() + scale_fill_discrete(name = "Observed \nDelay") + labs(title = "Proportion of Delayed Departure Flights", x = "Total number of departure and arrival flight at the same hour", y="", caption = "Figure 1") + theme(plot.title = element_text(hjust = 0.5), plot.caption = element_text(hjust = 0.5))
+```
+
+```{r eda2, fig.height=4}
+ggplot(tr15DEPNonM, aes(x = pre_actl_extraFactortaxi)) + 
+  geom_bar(aes(fill = as.factor(DEP_DEL15)), position = "fill") +
+  theme_bw() + scale_fill_discrete(name = "Observed \nDelay") + labs(title = "Proportion of Delayed Departure Flights", x = "Time to prepare for departure after arrival", y="", caption = "Figure 2") + theme(plot.title = element_text(hjust = 0.5), plot.caption = element_text(hjust = 0.5))
+```
+
+Figure 1 above shows the proportion of delayed departure flights versus the total number of departure and arrival flight at the same hour. From the plot, the proportion of PIT departure delayed flights increase with the total number of flights departing and arriving at the PIT.    
+Based on the plane registered tail number (TAIL_NUM), we was able to identify if a planned departure plane was just arrived from another airport to PIT or not. We calculated time between the plane actual arrival plus taxing time (ARR_TIME + TAXI_IN) and the plane planned departure time (CRS_DEP_TIME). If a scheduled departure plane wasn't from another city, time left for plane departure preparation was not applicable. In order to still use this variable, we discretized this time into 12 levels, with 1 meaning less than 5 minutes left, and 12 meaning more than 90 minutes left.Figure 2 shows the proportion of delayed departure flights versus the actual time left for departure preparation after the plane arrived at PIT. 
+
+## Models - K-Nearest-Neighbors
+
+K-Nearest-Neighbors (KNN) is a model-free classification method. It predicts an input according to its nearest-neighbors and then classifies according to a majority vote. Because KNN method heavily depends on distances between data points, we transferred all the categorical variables into numeric variables, except the flight carrier (CARRIER) and the flight destination (DEST). Also, to avoid variables with large variation determine the distances between points, we standardized all numeric variables before fitting the data in the KNN model. In order to choose the number of neighbors, parameter k, we ran KNN models with 1 to 40 nearest-neighbors, and k=13 gives the lowest misclassification rates when comparing predictions to 16 test data.

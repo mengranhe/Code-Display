@@ -1,0 +1,99 @@
+---
+title: "XGBoost"
+author: "Mengran He"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: pdf_document
+---
+```{r, include = FALSE}
+library(knitr)
+options(scipen = 999)
+library(dplyr)
+library(magrittr)
+library(glmnet)
+library(pROC)
+library(caret)
+library(xgboost)
+library(ggplot2)
+opts_chunk$set(out.width="300px", dpi=100,fig.align="center") #globally set the size of images
+opts_chunk$set(echo=TRUE,  # change to FALSE to keep code out of the knitted document
+               cache=TRUE, # do not re-run code that has already been run
+               autodep=TRUE, # assure that caching dependencies are updated correctly
+               cache.comments=FALSE, # do not re-run a chunk if only comments are changed
+               message=FALSE, # change to FALSE to keep messages out of the knitted document
+               warning=FALSE  # change to FALSE to keep warnings out of the knitted document
+               )
+```
+
+#XGBoost
+#Building Model on Training set and Testing Selected Model on Testing set
+Extreme Gradiant Boosting(xgboost) is an efficient algorithm that can be applied in supervised learning because it has high predictive power and fast computation. We decided to apply xgboost on training set (flight activities in 2015) and tried to find the best model by tuning booster parameters with 5 folds cross-validation. For the booster parameters, we tuned on learning rate(`eta`), `gamma`, maximum depth of the tree (`max_depth`), and subsample of training instance (`subsample`) and built 1000 trees in the model (`nrounds`). The learning rate specifies step size shrinkage used in update to prevents overfitting, the smaller `eta` the more conservative the algorithm will be. `gamma` represents the minimum loss reduction required to make a further partition on a leaf node of the tree, so the larger the gamma more conservative the algorithm is.
+
+```{r echo = TRUE, eval = FALSE}
+xgb_grid1 = expand.grid(
+  nrounds = 1000,
+  eta = c(0.01, 0.001, 0.0005),
+  max_depth = seq(2, 10, 2),
+  gamma = c(0.5, 1),
+  colsample_bytree = 1,    
+  min_child_weight = 1,   
+  subsample = c(0.5, 1)   
+)
+```
+
+After 5 folds of cross validation, we have the model with largest AUC (0.8806) value with `max_dempth = 6`, `ets = 0.01`, `gamma = 1`, `subsample` = 0.5. Figure 1 shows the results of AUC given the values of learning rate and tree depth, the ligher color and bigger size of the dot suggests higher AUC value.
+
+```{r label1, echo = FALSE, fig.cap = "Scatter Plot of AUC given Learning Rate and Tree Depth on Training set"}
+load("xgbFit.RData")
+ggplot(xgb_fit1$results, aes(x = as.factor(eta), y = max_depth, size = ROC, color = ROC)) + geom_point() + theme_bw() + scale_size_continuous(guide = "none") + labs(x = "Learning Rate (ETA)", y = "Maximum Depth of the Tree", title = "Scatter Plot of AUC given Learning \nRate and Tree Depth")
+```
+
+Then we used the selected model to predict the flight delays on testing set (visible data in 2016). The figure 2 shows the histogram of the probability of departure delay given the actual flight delay information with two colors, where 0 means actual flight didn't delay, 1 means the flight delayed. In order to classify whether the flight delays or not, we tuned the cutoff value of probability of departure delay based on the missclassification rate, in such a way that we get the minimized missclassification rate 0.056 with cutoff value 31.2%. It means that if the probability of delay is greater than 31.2%, the flight is predicted to be delay. 
+
+```{r lable2, echo = FALSE, fig.cap = "Histogram of Predicted Probability of Flight Delay Given Actual Flight Delay Information"}
+load("WeatherData.RData")
+# Plot overlayed predicted probability histogram 
+plotDF_xgb = as.data.frame(y_hat_xgb)
+names(plotDF_xgb) = "probs"
+
+ggplot(plotDF_xgb, aes(x = probs)) + 
+  geom_histogram(binwidth = 0.02, 
+                 aes(fill = as.factor(y.test)),
+                 position = "identity", alpha = 0.65) +
+  labs(title = "Overlayed Histogram of Predicted Probabilities",
+       x = "Predicted Probability", y = "Number of Flights") +
+  theme_bw() +
+  scale_fill_discrete(name = "Observed Y")
+```
+
+Given the actual flight information in testing set, we generalized the following confusion matrix. Based on the following table, we predicted 11481 flights information correctly and 683 wrong.
+
+```{r, echo = FALSE, results = "asis"}
+require(pander)
+tabl <- "  
+| **Prediction/Observation**| **Not Delay**| **Delay**|
+|:---------------:|:-------------:|:------:|
+| **Not Delay**       | 11061 | 607 |
+| **Delay**   | 76 |   420|
+"
+cat(tabl)
+#Note: the syntax "Table" below has to stick with this chunk.
+```
+Table: Confusion Matrix of Predicting Flight Delay and Actual Flight Delay
+
+
+##Predicting Flight Departure in 2016 by Using Full Dataset
+Based on the selected model with tuned booster parameter, we used all the flight activities in 2015 and provided flight activities in 2016 to implement Extreme Gradiant Boosting algorithm by building 1000 trees in order to predict the rest of flight activities in 2016. 
+
+```{r echo = FALSE}
+#load xgbFit_Full.RData to get the predicting probability
+#load("xgbFit_Full.RData")
+```
+
+
+
+```{r, include = FALSE}
+#xgboost reference:
+#https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/
+```
+
+
